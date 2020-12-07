@@ -12,6 +12,7 @@ import android.graphics.Rect;
 import android.os.Environment;
 import android.util.Base64;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 
 import com.facebook.react.bridge.Arguments;
@@ -38,6 +39,7 @@ class CanvasText {
 public class SketchCanvas extends View {
 
     private ArrayList<SketchData> mPaths = new ArrayList<SketchData>();
+    private static final String TAG ="[sketch]";
     private SketchData mCurrentPath = null;
 
     private ThemedReactContext mContext;
@@ -52,6 +54,8 @@ public class SketchCanvas extends View {
     private int mOriginalWidth, mOriginalHeight;
     private Bitmap mBackgroundImage;
     private String mContentMode;
+    private int strokeWidth = 2;
+    private int strokeColor = Color.BLACK;
 
     private ArrayList<CanvasText> mArrCanvasText = new ArrayList<CanvasText>();
     private ArrayList<CanvasText> mArrTextOnSketch = new ArrayList<CanvasText>();
@@ -60,6 +64,7 @@ public class SketchCanvas extends View {
     public SketchCanvas(ThemedReactContext context) {
         super(context);
         mContext = context;
+
     }
 
     public boolean openImageFile(String filename, String directory, String mode) {
@@ -85,6 +90,51 @@ public class SketchCanvas extends View {
         }
         return false;
     }
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+
+        float touchX = event.getX();
+        float touchY = event.getY();
+//
+//        if(event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER){
+//            return super.onTouchEvent(event);
+//        }
+
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                PointF sp = new PointF(touchX,touchY);
+                ArrayList<PointF> points = new ArrayList<>();
+                points.add(sp);
+               newPath((int) event.getDownTime(), strokeColor, strokeWidth );
+               addPoint(touchX,touchY);
+                break;
+            case MotionEvent.ACTION_MOVE :
+//                this.onActionMove(event);
+                addPoint(touchX, touchY);
+                break;
+            case MotionEvent.ACTION_UP :
+//                this.onActionUp(event);
+                end();
+                break;
+            default :
+                break;
+        }
+        return true;
+    }
+
+
+
+
+    public void setStrokeWidth(int width){
+        this.strokeWidth = width;
+    }
+
+    public void setStrokeColor(int color){
+        this.strokeColor = color;
+    }
+
 
     public void setCanvasText(ReadableArray aText) {
         mArrCanvasText.clear();
@@ -195,6 +245,9 @@ public class SketchCanvas extends View {
     }
 
     public void addPoint(float x, float y) {
+       if(mCurrentPath == null){
+           return;
+       }
         Rect updateRect = mCurrentPath.addPoint(new PointF(x, y));
 
         if (mCurrentPath.isTranslucent) {
@@ -236,13 +289,22 @@ public class SketchCanvas extends View {
                 break;
             }
         }
-
         if (index > -1) {
             mPaths.remove(index);
             mNeedsFullRedraw = true;
             invalidateCanvas(true);
         }
     }
+
+    public void undo() {
+        int index = mPaths.size()-1;
+        if (index > -1) {
+            mPaths.remove(index);
+            mNeedsFullRedraw = true;
+            invalidateCanvas(true);
+        }
+    }
+
 
     public void end() {
         if (mCurrentPath != null) {

@@ -10,6 +10,8 @@ import ReactNative, {
   requireNativeComponent,
   NativeModules,
   UIManager,
+  PanResponder,
+  PixelRatio,
   Platform,
   ViewPropTypes,
   processColor,
@@ -36,9 +38,12 @@ const SketchCanvasView = (props, ref) => {
     )
   );
 
+  const _pathsToProcess = useRef([]);
   const _paths = useRef([]);
   const _path = useRef();
   const _handle = useRef();
+  const _screenScale = useRef(Platform.OS === "ios" ? 1 : PixelRatio.get());
+  const _offset = useRef({ x: 0, y: 0 });
   const _size = useRef({ width: 0, height: 0 });
   const _initialized = useRef(false);
 
@@ -49,6 +54,45 @@ const SketchCanvasView = (props, ref) => {
       )
     );
   }, [props.text]);
+
+  function addPath(data) {
+    if (_initialized.current) {
+      if (_paths.current.filter((p) => p.path.id === data.path.id).length === 0)
+        _paths.current.push(data);
+      const pathData = data.path.data.map((p) => {
+        const coor = p.split(",").map((pp) => parseFloat(pp).toFixed(2));
+        return `${
+          (coor[0] * _screenScale.current * _size.current.width) /
+          data.size.width
+        },${
+          (coor[1] * _screenScale.current * _size.current.height) /
+          data.size.height
+        }`;
+      });
+      UIManager.dispatchViewManagerCommand(
+        _handle.current,
+        UIManager.RNSketchCanvas.Commands.addPath,
+        [
+          data.path.id,
+          processColor(data.path.color),
+          data.path.width * _screenScale.current,
+          pathData,
+        ]
+      );
+    } else {
+      _pathsToProcess.current.filter((p) => p.path.id === data.path.id)
+        .length === 0 && _pathsToProcess.current.push(data);
+    }
+  }
+
+  function deletePath(id) {
+    _paths.current = _paths.current.filter((p) => p.path.id !== id);
+    UIManager.dispatchViewManagerCommand(
+      _handle.current,
+      UIManager.RNSketchCanvas.Commands.deletePath,
+      [id]
+    );
+  }
 
   useImperativeHandle(ref, () => {
     return {
@@ -61,15 +105,19 @@ const SketchCanvasView = (props, ref) => {
         includeText,
         cropToImageSize
       ) {
-        UIManager.dispatchViewManagerCommand(_handle.current, "save", [
-          imageType,
-          folder,
-          filename,
-          transparent,
-          includeImage,
-          includeText,
-          cropToImageSize,
-        ]);
+        UIManager.dispatchViewManagerCommand(
+          _handle.current,
+          UIManager.RNSketchCanvas.Commands.save,
+          [
+            imageType,
+            folder,
+            filename,
+            transparent,
+            includeImage,
+            includeText,
+            cropToImageSize,
+          ]
+        );
       },
 
       getPaths() {
@@ -110,14 +158,131 @@ const SketchCanvasView = (props, ref) => {
       clear() {
         _paths.current = [];
         _path.current = null;
-        UIManager.dispatchViewManagerCommand(_handle.current, "clear", []);
+        UIManager.dispatchViewManagerCommand(
+          _handle.current,
+          UIManager.RNSketchCanvas.Commands.clear,
+          []
+        );
       },
 
       undo() {
-        UIManager.dispatchViewManagerCommand(_handle.current, "undo", []);
+        let lastId = -1;
+        _paths.current.forEach(
+          (d) => (lastId = d.drawer === props.user ? d.path.id : lastId)
+        );
+        if (lastId >= 0) deletePath(lastId);
+        return lastId;
       },
     };
   });
+
+  const onPanResponderGrant = (evt, gestureState) => {
+      evt.persist();
+      console.log("[pan] grant", props.strokeColor, evt, gestureState);
+
+      if (!props.touchEnabled) return;
+      const e = evt.nativeEvent;
+      _offset.current = {
+        x: e.pageX - e.locationX,
+        y: e.pageY - e.locationY,
+      };
+      _path.current = {
+        id: parseInt(Math.random() * 100000000),
+        color: props.strokeColor,
+        width: props.strokeWidth,
+        data: [],
+      };
+
+      UIManager.dispatchViewManagerCommand(
+        _handle.current,
+        UIManager.RNSketchCanvas.Commands.newPath,
+        [
+          _path.current.id,
+          processColor(_path.current.color),
+          _path.current.width * _screenScale.current,
+        ]
+      );
+      UIManager.dispatchViewManagerCommand(
+        _handle.current,
+        UIManager.RNSketchCanvas.Commands.addPoint,
+        [
+          parseFloat(
+            (gestureState.x0 - _offset.current.x).toFixed(2) *
+              _screenScale.current
+          ),
+          parseFloat(
+            (gestureState.y0 - _offset.current.y).toFixed(2) *
+              _screenScale.current
+          ),
+        ]
+      );
+      const x = parseFloat((gestureState.x0 - _offset.current.x).toFixed(2)),
+        y = parseFloat((gestureState.y0 - _offset.current.y).toFixed(2));
+      _path.current.data.push(`${x},${y}`);
+      props.onStrokeStart(x, y);
+    }
+  
+  const onPanResponderMove= (evt, gestureState) => {
+    if (!props.touchEnabled) return;
+    if (_path.current) {
+      UIManager.dispatchViewManagerCommand(
+        _handle.current,
+        UIManager.RNSketchCanvas.Commands.addPoint,
+        [
+          parseFloat(
+            (gestureState.moveX - _offset.current.x).toFixed(2) *
+              _screenScale.current
+          ),
+          parseFloat(
+            (gestureState.moveY - _offset.current.y).toFixed(2) *
+              _screenScale.current
+          ),
+        ]
+      );
+      const x = parseFloat(
+          (gestureState.moveX - _offset.current.x).toFixed(2)
+        ),
+        y = parseFloat((gestureState.moveY - _offset.current.y).toFixed(2));
+      _path.current.data.push(`${x},${y}`);
+      props.onStrokeChanged(x, y);
+    }
+  }
+
+  const onPanResponderRelease = (evt, gestureState) => {
+    if (!props.touchEnabled) return;
+    if (_path.current) {
+      props.onStrokeEnd({
+        path: _path.current,
+        size: _size.current,
+        drawer: props.user,
+      });
+      _paths.current.push({
+        path: _path.current,
+        size: _size.current,
+        drawer: props.user,
+      });
+    }
+    UIManager.dispatchViewManagerCommand(
+      _handle.current,
+      UIManager.RNSketchCanvas.Commands.endPath,
+      []
+    );
+  }
+  const panResponder = PanResponder.create({
+      // Ask to be the responder:
+      onStartShouldSetPanResponder: (evt, gestureState) => true,
+      onStartShouldSetPanResponderCapture: (evt, gestureState) => true,
+      onMoveShouldSetPanResponder: (evt, gestureState) => true,
+      onMoveShouldSetPanResponderCapture: (evt, gestureState) => true,
+
+      onPanResponderGrant,
+      onPanResponderMove,
+      onPanResponderRelease,
+
+      onShouldBlockNativeResponder: (evt, gestureState) => {
+        return true;
+      },
+    })
 
   useEffect(() => {
     requestPermissions(
@@ -132,18 +297,17 @@ const SketchCanvasView = (props, ref) => {
         _handle.current = ReactNative.findNodeHandle(ref);
       }}
       style={props.style}
-      strokeColor={processColor(props.strokeColor) || processColor("#7a8a9a")}
-      strokeWidth={props.strokeWidth || 2}
       onLayout={(e) => {
         _size.current = {
           width: e.nativeEvent.layout.width,
           height: e.nativeEvent.layout.height,
         };
         _initialized.current = true;
+        _pathsToProcess.current.length > 0 &&
+          _pathsToProcess.current.forEach((p) => addPath(p));
       }}
+      {...panResponder.panHandlers}
       onChange={(e) => {
-        console.log("change paths", e.nativeEvent);
-
         if (e.nativeEvent.hasOwnProperty("pathsUpdate")) {
           props.onPathsChange(e.nativeEvent.pathsUpdate);
         } else if (

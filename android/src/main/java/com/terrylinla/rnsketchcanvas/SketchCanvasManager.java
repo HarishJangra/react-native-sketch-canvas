@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.util.Log;
 
 import com.facebook.common.logging.FLog;
@@ -26,16 +27,19 @@ import java.util.Map;
 import java.util.ArrayList;
 import android.graphics.PointF;
 
+import androidx.annotation.NonNull;
+
 import javax.annotation.Nullable;
 
 public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
-    public static final int COMMAND_ADD_POINT = 1;
-    public static final int COMMAND_NEW_PATH = 2;
-    public static final int COMMAND_CLEAR = 3;
-    public static final int COMMAND_ADD_PATH = 4;
-    public static final int COMMAND_DELETE_PATH = 5;
-    public static final int COMMAND_SAVE = 6;
-    public static final int COMMAND_END_PATH = 7;
+    public static final String COMMAND_ADD_POINT = "addPoint";
+    public static final String COMMAND_NEW_PATH = "newPath";
+    public static final String COMMAND_CLEAR = "clear";
+    public static final String COMMAND_ADD_PATH = "addPath";
+    public static final String COMMAND_DELETE_PATH = "deletePath";
+    public static final String COMMAND_SAVE = "save";
+    public static final String COMMAND_END_PATH = "end";
+    public static final String  COMMAND_UNDO = "undo";
 
     public static SketchCanvas Canvas = null;
 
@@ -69,20 +73,16 @@ public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
         viewContainer.setCanvasText(text);
     }
 
-    @Override
-    public Map<String,Integer> getCommandsMap() {
-        Map<String, Integer> map = new HashMap<>();
-
-        map.put("addPoint", COMMAND_ADD_POINT);
-        map.put("newPath", COMMAND_NEW_PATH);
-        map.put("clear", COMMAND_CLEAR);
-        map.put("addPath", COMMAND_ADD_PATH);
-        map.put("deletePath", COMMAND_DELETE_PATH);
-        map.put("save", COMMAND_SAVE);
-        map.put("endPath", COMMAND_END_PATH);
-
-        return map;
+    @ReactProp(name = "strokeColor")
+    public void setStrokeColor(SketchCanvas viewContainer, int color) {
+        viewContainer.setStrokeColor(color);
     }
+
+    @ReactProp(name = "strokeWidth")
+    public void setStrokeWidth(SketchCanvas viewContainer, int width) {
+        viewContainer.setStrokeWidth(width);
+    }
+
 
     @Override
     protected void addEventEmitters(ThemedReactContext reactContext, SketchCanvas view) {
@@ -90,7 +90,8 @@ public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
     }
 
     @Override
-    public void receiveCommand(SketchCanvas view, int commandType, @Nullable ReadableArray args) {
+    public void receiveCommand(@NonNull SketchCanvas view, String commandType, @androidx.annotation.Nullable ReadableArray args) {
+
         switch (commandType) {
             case COMMAND_ADD_POINT: {
                 view.addPoint((float)args.getDouble(0), (float)args.getDouble(1));
@@ -126,6 +127,11 @@ public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
                 view.end();
                 return;
             }
+
+            case COMMAND_UNDO: {
+                view.undo();
+                return;
+            }
             default:
                 throw new IllegalArgumentException(String.format(
                         "Unsupported command %d received by %s.",
@@ -133,4 +139,5 @@ public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
                         getClass().getSimpleName()));
         }
     }
+
 }
