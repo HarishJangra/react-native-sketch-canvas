@@ -41,6 +41,11 @@ public class SketchCanvas extends View {
     private ArrayList<SketchData> mPaths = new ArrayList<SketchData>();
     private static final String TAG ="[sketch]";
     private SketchData mCurrentPath = null;
+    public final String TOOL_TYPE_MODE_FINGER = "finger";
+    public final String TOOL_TYPE_MODE_PEN = "pen";
+
+    private String toolType = "finger";
+
 
     private ThemedReactContext mContext;
     private boolean mDisableHardwareAccelerated = false;
@@ -91,39 +96,55 @@ public class SketchCanvas extends View {
         return false;
     }
 
+    public static void disableTouchTheft(View view) {
+        view.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                view.getParent().requestDisallowInterceptTouchEvent(true);
+                switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
+                    case MotionEvent.ACTION_UP:
+                        view.getParent().requestDisallowInterceptTouchEvent(false);
+                        break;
+                }
+                return false;
+            }
+        });
+    }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
 
         float touchX = event.getX();
         float touchY = event.getY();
-//
-//        if(event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER){
-//            return super.onTouchEvent(event);
-//        }
+        Log.d(TAG, "onTouchEvent: tooltype "+ toolType +"-"+event.getToolType(0)+"- "+ String.valueOf(event.getPointerCount()));
+        if(toolType.equals(TOOL_TYPE_MODE_PEN)  && event.getToolType(0) != MotionEvent.TOOL_TYPE_STYLUS){
+            Log.d(TAG, "onTouchEvent: "+"take pen only");
+            return super.onTouchEvent(event);
+        }
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 PointF sp = new PointF(touchX,touchY);
                 ArrayList<PointF> points = new ArrayList<>();
                 points.add(sp);
+                this.getParent().requestDisallowInterceptTouchEvent(true);
                newPath((int) event.getDownTime(), strokeColor, strokeWidth );
                addPoint(touchX,touchY);
-                break;
+                return true;
             case MotionEvent.ACTION_MOVE :
 //                this.onActionMove(event);
                 addPoint(touchX, touchY);
-                break;
+                return true;
             case MotionEvent.ACTION_UP :
 //                this.onActionUp(event);
                 end();
-                break;
+                this.getParent().requestDisallowInterceptTouchEvent(false);
+                return true;
             default :
                 break;
         }
-        return true;
+        return false;
     }
-
 
 
 
@@ -133,6 +154,9 @@ public class SketchCanvas extends View {
 
     public void setStrokeColor(int color){
         this.strokeColor = color;
+    }
+    public void setToolType(String toolType){
+        this.toolType = toolType;
     }
 
 

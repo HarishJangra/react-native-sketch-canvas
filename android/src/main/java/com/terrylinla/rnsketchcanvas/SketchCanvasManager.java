@@ -83,6 +83,11 @@ public class SketchCanvasManager extends SimpleViewManager<SketchCanvas> {
         viewContainer.setStrokeWidth(width);
     }
 
+    @ReactProp(name = "toolType")
+    public void setToolType(SketchCanvas viewContainer, String tooltype) {
+        viewContainer.setToolType(tooltype);
+    }
+
 
     @Override
     protected void addEventEmitters(ThemedReactContext reactContext, SketchCanvas view) {

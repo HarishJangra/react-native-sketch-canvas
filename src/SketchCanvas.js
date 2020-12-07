@@ -50,6 +50,7 @@ const SketchCanvasView = (props, ref) => {
     );
   }, [props.text]);
 
+
   useImperativeHandle(ref, () => {
     return {
       save(
@@ -61,15 +62,19 @@ const SketchCanvasView = (props, ref) => {
         includeText,
         cropToImageSize
       ) {
-        UIManager.dispatchViewManagerCommand(_handle.current, "save", [
-          imageType,
-          folder,
-          filename,
-          transparent,
-          includeImage,
-          includeText,
-          cropToImageSize,
-        ]);
+        UIManager.dispatchViewManagerCommand(
+          _handle.current,
+          "save",
+          [
+            imageType,
+            folder,
+            filename,
+            transparent,
+            includeImage,
+            includeText,
+            cropToImageSize,
+          ]
+        );
       },
 
       getPaths() {
@@ -110,11 +115,19 @@ const SketchCanvasView = (props, ref) => {
       clear() {
         _paths.current = [];
         _path.current = null;
-        UIManager.dispatchViewManagerCommand(_handle.current, "clear", []);
+        UIManager.dispatchViewManagerCommand(
+          _handle.current,
+          "clear",
+          []
+        );
       },
 
       undo() {
-        UIManager.dispatchViewManagerCommand(_handle.current, "undo", []);
+        UIManager.dispatchViewManagerCommand(
+          _handle.current,
+          "undo",
+          []
+        );
       },
     };
   });
@@ -125,7 +138,7 @@ const SketchCanvasView = (props, ref) => {
       props.permissionDialogMessage
     );
   }, [props.permissionDialogMessage, props.permissionDialogTitle]);
-
+  
   return (
     <RNSketchCanvas
       ref={(ref) => {
@@ -134,16 +147,18 @@ const SketchCanvasView = (props, ref) => {
       style={props.style}
       strokeColor={processColor(props.strokeColor) || processColor("#7a8a9a")}
       strokeWidth={props.strokeWidth || 2}
+      toolType ={props.toolType}
       onLayout={(e) => {
         _size.current = {
           width: e.nativeEvent.layout.width,
           height: e.nativeEvent.layout.height,
         };
         _initialized.current = true;
+      
       }}
       onChange={(e) => {
         console.log("change paths", e.nativeEvent);
-
+        
         if (e.nativeEvent.hasOwnProperty("pathsUpdate")) {
           props.onPathsChange(e.nativeEvent.pathsUpdate);
         } else if (
@@ -174,6 +189,7 @@ SketchCanvas.propTypes = {
   onStrokeEnd: PropTypes.func,
   onSketchSaved: PropTypes.func,
   user: PropTypes.string,
+  overlay: PropTypes.oneOf(["finger", "pen"]),
 
   touchEnabled: PropTypes.bool,
 
@@ -211,6 +227,7 @@ SketchCanvas.defaultProps = {
   onStrokeEnd: () => {},
   onSketchSaved: () => {},
   user: null,
+  toolType:"finger",
 
   touchEnabled: true,
 
